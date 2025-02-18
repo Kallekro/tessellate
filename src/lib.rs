@@ -1,6 +1,7 @@
 mod texture;
 
 use cgmath::prelude::*;
+use rand::prelude::*;
 use std::iter;
 
 use winit::{
@@ -196,8 +197,10 @@ impl CameraController {
 }
 
 struct Instance {
+    origin_position: cgmath::Vector3<f32>,
     position: cgmath::Vector3<f32>,
     rotation: cgmath::Quaternion<f32>,
+    velocity: cgmath::Vector3<f32>,
 }
 
 impl Instance {
@@ -254,6 +257,11 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     0.0,
     NUM_INSTANCES_PER_ROW as f32 * 0.5,
 );
+
+const INSTANCES_MAX_X_DIVERGENCE: f32 = 0.04;
+const INSTANCES_MAX_Y_DIVERGENCE: f32 = 0.01;
+
+const INSTANCE_POSITION_SPEED: f32 = 0.0004;
 
 struct State<'a> {
     surface: wgpu::Surface<'a>,
@@ -460,7 +468,17 @@ impl<'a> State<'a> {
                         cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
                     };
 
-                    Instance { position, rotation }
+                    let mut rng = rand::rng();
+                    Instance {
+                        position,
+                        rotation,
+                        origin_position: position,
+                        velocity: cgmath::Vector3 {
+                            x: rng.random_range(0.1..0.4) * INSTANCE_POSITION_SPEED,
+                            y: rng.random_range(0.05..0.1) * INSTANCE_POSITION_SPEED,
+                            z: 0.,
+                        },
+                    }
                 })
             })
             .collect::<Vec<_>>();
@@ -469,7 +487,7 @@ impl<'a> State<'a> {
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
             contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -585,6 +603,37 @@ impl<'a> State<'a> {
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[self.camera_uniform]),
+        );
+
+        // Update position of instances
+        self.instances.iter_mut().for_each(|instance| {
+            instance.position.x = instance.position.x + instance.velocity.x;
+            let x_diff = instance.position.x - instance.origin_position.x;
+            if x_diff.abs() >= INSTANCES_MAX_X_DIVERGENCE {
+                instance.position.x =
+                    instance.origin_position.x + x_diff.signum() * INSTANCES_MAX_X_DIVERGENCE;
+                instance.velocity.x = instance.velocity.x * -1.;
+            }
+
+            instance.position.y = instance.position.y + instance.velocity.y;
+            let y_diff = instance.position.y - instance.origin_position.y;
+            if y_diff.abs() >= INSTANCES_MAX_Y_DIVERGENCE {
+                instance.position.y =
+                    instance.origin_position.y + y_diff.signum() * INSTANCES_MAX_Y_DIVERGENCE;
+                instance.velocity.y = instance.velocity.y * -1.;
+            }
+        });
+
+        let instance_data = self
+            .instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>();
+
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&instance_data),
         );
     }
 
