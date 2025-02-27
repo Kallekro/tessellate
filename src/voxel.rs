@@ -10,6 +10,8 @@ struct Vertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
+    pub tangent: [f32; 3],
+    pub bitangent: [f32; 3],
 }
 
 const VERTICES: &[Vertex] = &[
@@ -18,128 +20,182 @@ const VERTICES: &[Vertex] = &[
         position: [1.0, 1.0, -1.0],
         tex_coords: [1.0, 1.0],
         normal: [0.0, 0.0, -1.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // top-right
     Vertex {
         position: [1.0, -1.0, -1.0],
         tex_coords: [1.0, 0.0],
         normal: [0.0, 0.0, -1.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // bottom-right
     Vertex {
         position: [-1.0, -1.0, -1.0],
         tex_coords: [0.0, 0.0],
         normal: [0.0, 0.0, -1.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // bottom-left
     Vertex {
         position: [-1.0, 1.0, -1.0],
         tex_coords: [0.0, 1.0],
         normal: [0.0, 0.0, -1.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // top-left
+
     // Front face (z = 1)
     Vertex {
         position: [1.0, 1.0, 1.0],
         tex_coords: [1.0, 1.0],
         normal: [0.0, 0.0, 1.0],
+        tangent: [-1.0, 0.0, 0.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // top-right
     Vertex {
         position: [1.0, -1.0, 1.0],
         tex_coords: [1.0, 0.0],
         normal: [0.0, 0.0, 1.0],
+        tangent: [-1.0, 0.0, 0.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // bottom-right
     Vertex {
         position: [-1.0, -1.0, 1.0],
         tex_coords: [0.0, 0.0],
         normal: [0.0, 0.0, 1.0],
+        tangent: [-1.0, 0.0, 0.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // bottom-left
     Vertex {
         position: [-1.0, 1.0, 1.0],
         tex_coords: [0.0, 1.0],
         normal: [0.0, 0.0, 1.0],
+        tangent: [-1.0, 0.0, 0.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // top-left
+
     // Top face (y = 1)
     Vertex {
         position: [1.0, 1.0, 1.0],
         tex_coords: [1.0, 1.0],
         normal: [0.0, 1.0, 0.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, 0.0, 1.0],
     }, // front-right
     Vertex {
         position: [1.0, 1.0, -1.0],
         tex_coords: [1.0, 0.0],
         normal: [0.0, 1.0, 0.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, 0.0, 1.0],
     }, // back-right
     Vertex {
         position: [-1.0, 1.0, -1.0],
         tex_coords: [0.0, 0.0],
         normal: [0.0, 1.0, 0.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, 0.0, 1.0],
     }, // back-left
     Vertex {
         position: [-1.0, 1.0, 1.0],
         tex_coords: [0.0, 1.0],
         normal: [0.0, 1.0, 0.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, 0.0, 1.0],
     }, // front-left
+
     // Bottom face (y = -1)
     Vertex {
         position: [1.0, -1.0, 1.0],
         tex_coords: [1.0, 1.0],
         normal: [0.0, -1.0, 0.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, 0.0, -1.0],
     }, // front-right
     Vertex {
         position: [1.0, -1.0, -1.0],
         tex_coords: [1.0, 0.0],
         normal: [0.0, -1.0, 0.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, 0.0, -1.0],
     }, // back-right
     Vertex {
         position: [-1.0, -1.0, -1.0],
         tex_coords: [0.0, 0.0],
         normal: [0.0, -1.0, 0.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, 0.0, -1.0],
     }, // back-left
     Vertex {
         position: [-1.0, -1.0, 1.0],
         tex_coords: [0.0, 1.0],
         normal: [0.0, -1.0, 0.0],
+        tangent: [1.0, 0.0, 0.0],
+        bitangent: [0.0, 0.0, -1.0],
     }, // front-left
+
     // Right face (x = 1)
     Vertex {
         position: [1.0, 1.0, 1.0],
         tex_coords: [1.0, 1.0],
         normal: [1.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, -1.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // front-top
     Vertex {
         position: [1.0, -1.0, 1.0],
         tex_coords: [1.0, 0.0],
         normal: [1.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, -1.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // front-bottom
     Vertex {
         position: [1.0, -1.0, -1.0],
         tex_coords: [0.0, 0.0],
         normal: [1.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, -1.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // back-bottom
     Vertex {
         position: [1.0, 1.0, -1.0],
         tex_coords: [0.0, 1.0],
         normal: [1.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, -1.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // back-top
+
     // Left face (x = -1)
     Vertex {
         position: [-1.0, 1.0, 1.0],
         tex_coords: [1.0, 1.0],
         normal: [-1.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, 1.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // front-top
     Vertex {
         position: [-1.0, -1.0, 1.0],
         tex_coords: [1.0, 0.0],
         normal: [-1.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, 1.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // front-bottom
     Vertex {
         position: [-1.0, -1.0, -1.0],
         tex_coords: [0.0, 0.0],
         normal: [-1.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, 1.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // back-bottom
     Vertex {
         position: [-1.0, 1.0, -1.0],
         tex_coords: [0.0, 1.0],
         normal: [-1.0, 0.0, 0.0],
+        tangent: [0.0, 0.0, 1.0],
+        bitangent: [0.0, -1.0, 0.0],
     }, // back-top
 ];
+
 
 const INDICES: &[u32] = &[
     0, 1, 2, 2, 3, 0, // Back face
@@ -179,12 +235,12 @@ impl VoxelModel {
                 position: VERTICES[i].position,
                 tex_coords: VERTICES[i].tex_coords,
                 normal: VERTICES[i].normal,
-                tangent: [0.0; 3],
-                bitangent: [0.0; 3],
+                tangent: VERTICES[i].tangent,
+                bitangent: VERTICES[i].bitangent,
             })
             .collect::<Vec<_>>();
 
-        model::ModelVertex::calculate_tangents_and_bitangents(&mut vertices, &INDICES.to_vec());
+        // model::ModelVertex::calculate_tangents_and_bitangents(&mut vertices, &INDICES.to_vec());
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
