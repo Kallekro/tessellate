@@ -1,5 +1,5 @@
 use std::ops::Range;
-
+use cgmath::InnerSpace;
 use crate::texture;
 
 pub trait Vertex {
@@ -56,69 +56,98 @@ impl Vertex for ModelVertex {
 
 impl ModelVertex {
     pub fn calculate_tangents_and_bitangents(vertices: &mut Vec<ModelVertex>, indices: &Vec<u32>) {
+        // Initialize to zero
+        for vertex in vertices.iter_mut() {
+            vertex.tangent = [0.0, 0.0, 0.0];
+            vertex.bitangent = [0.0, 0.0, 0.0];
+        }
+
         let mut triangles_included = vec![0; vertices.len()];
-        // We're going to use the triangles,
-        // so we need to loop through the indices in chunks of 3
+
+        // Process each triangle
         for c in indices.chunks(3) {
             let v0 = vertices[c[0] as usize];
             let v1 = vertices[c[1] as usize];
             let v2 = vertices[c[2] as usize];
 
-            let pos0: cgmath::Vector3<_> = v0.position.into();
-            let pos1: cgmath::Vector3<_> = v1.position.into();
-            let pos2: cgmath::Vector3<_> = v2.position.into();
+            let pos0: cgmath::Vector3<f32> = v0.position.into();
+            let pos1: cgmath::Vector3<f32> = v1.position.into();
+            let pos2: cgmath::Vector3<f32> = v2.position.into();
 
-            let uv0: cgmath::Vector2<_> = v0.tex_coords.into();
-            let uv1: cgmath::Vector2<_> = v1.tex_coords.into();
-            let uv2: cgmath::Vector2<_> = v2.tex_coords.into();
+            let uv0: cgmath::Vector2<f32> = v0.tex_coords.into();
+            let uv1: cgmath::Vector2<f32> = v1.tex_coords.into();
+            let uv2: cgmath::Vector2<f32> = v2.tex_coords.into();
 
-            // Calculate the edges of the triangle
+            // Calculate edges
             let delta_pos1 = pos1 - pos0;
             let delta_pos2 = pos2 - pos0;
 
-            // This will give us a direction to calculate the
-            // tangent and bitangent
             let delta_uv1 = uv1 - uv0;
             let delta_uv2 = uv2 - uv0;
 
-            // Solving the following system of equations will
-            // give us the tangent and bitangent.
-            //     delta_pos1 = delta_uv1.x * T + delta_u.y * B
-            //     delta_pos2 = delta_uv2.x * T + delta_uv2.y * B
-            // Luckily, the place I found this equation provided
-            // the solution!
-            let r = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
+            // Calculate determinant and check for degenerate UV case
+            let det = delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x;
+
+            if det.abs() < 1e-6 {
+                // Degenerate UV mapping - use a fallback method
+                // For a cube, we can derive tangents from the normal
+                let normal = cgmath::Vector3::from(v0.normal);
+                let c1 = normal.cross(cgmath::Vector3::unit_y());
+                let c2 = normal.cross(cgmath::Vector3::unit_x());
+
+                // Use the larger one to avoid zero vectors
+                let tangent = if c1.magnitude2() > c2.magnitude2() {
+                    c1.normalize()
+                } else {
+                    c2.normalize()
+                };
+
+                let bitangent = normal.cross(tangent).normalize();
+
+                // Assign to all vertices of this triangle
+                for &idx in c.iter() {
+                    vertices[idx as usize].tangent = tangent.into();
+                    vertices[idx as usize].bitangent = bitangent.into();
+                    triangles_included[idx as usize] = 1; // Mark as processed
+                }
+                continue;
+            }
+
+            let r = 1.0 / det;
+
             let tangent = (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y) * r;
-            // We flip the bitangent to enable right-handed normal
-            // maps with wgpu texture coordinate system
             let bitangent = (delta_pos2 * delta_uv1.x - delta_pos1 * delta_uv2.x) * -r;
 
-            // We'll use the same tangent/bitangent for each vertex in the triangle
-            vertices[c[0] as usize].tangent =
-                (tangent + cgmath::Vector3::from(vertices[c[0] as usize].tangent)).into();
-            vertices[c[1] as usize].tangent =
-                (tangent + cgmath::Vector3::from(vertices[c[1] as usize].tangent)).into();
-            vertices[c[2] as usize].tangent =
-                (tangent + cgmath::Vector3::from(vertices[c[2] as usize].tangent)).into();
-            vertices[c[0] as usize].bitangent =
-                (bitangent + cgmath::Vector3::from(vertices[c[0] as usize].bitangent)).into();
-            vertices[c[1] as usize].bitangent =
-                (bitangent + cgmath::Vector3::from(vertices[c[1] as usize].bitangent)).into();
-            vertices[c[2] as usize].bitangent =
-                (bitangent + cgmath::Vector3::from(vertices[c[2] as usize].bitangent)).into();
-
-            // Used to average the tangents/bitangents
-            triangles_included[c[0] as usize] += 1;
-            triangles_included[c[1] as usize] += 1;
-            triangles_included[c[2] as usize] += 1;
+            // Add to running sum for each vertex
+            for &idx in c.iter() {
+                let v = &mut vertices[idx as usize];
+                v.tangent = (cgmath::Vector3::from(v.tangent) + tangent).into();
+                v.bitangent = (cgmath::Vector3::from(v.bitangent) + bitangent).into();
+                triangles_included[idx as usize] += 1;
+            }
         }
 
-        // Average the tangents/bitangents
-        for (i, n) in triangles_included.into_iter().enumerate() {
-            let denom = 1.0 / n as f32;
-            let v = &mut vertices[i];
-            v.tangent = (cgmath::Vector3::from(v.tangent) * denom).into();
-            v.bitangent = (cgmath::Vector3::from(v.bitangent) * denom).into();
+        // Orthogonalize and normalize tangent space for each vertex
+        for (i, count) in triangles_included.iter().enumerate() {
+            if *count > 0 {
+                let v = &mut vertices[i];
+
+                // Get vectors
+                let n = cgmath::Vector3::from(v.normal).normalize();
+                let mut t = cgmath::Vector3::from(v.tangent);
+                let mut b = cgmath::Vector3::from(v.bitangent);
+
+                // Gram-Schmidt orthogonalize
+                t = (t - n * n.dot(t)).normalize();
+
+                // Recalculate bitangent to ensure right-handed coordinate system
+                // b = n.cross(t) ensures orthogonality
+                b = n.cross(t);
+
+                // Store results
+                v.tangent = t.into();
+                v.bitangent = b.into();
+            }
         }
     }
 }

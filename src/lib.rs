@@ -333,7 +333,7 @@ impl<'a> State<'a> {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let camera = camera::Camera::new((-2.0, 30.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-70.0));
         let projection =
             camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera::CameraController::new(4.0, 0.4);
@@ -403,7 +403,7 @@ impl<'a> State<'a> {
         });
 
         let light_uniform = LightUniform {
-            position: [2.0, 2.0, 2.0],
+            position: [10.0, 10.0, 10.0],
             _padding: 0,
             color: [1., 1., 1.],
             _padding2: 0,
@@ -595,17 +595,17 @@ impl<'a> State<'a> {
         );
 
         // Update light
-        let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
-        self.light_uniform.position = (cgmath::Quaternion::from_axis_angle(
-            (0.0, 1.0, 0.0).into(),
-            cgmath::Deg(60.0 * dt.as_secs_f32()),
-        ) * old_position)
-            .into();
-        self.queue.write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[self.light_uniform]),
-        );
+        // let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
+        // self.light_uniform.position = (cgmath::Quaternion::from_axis_angle(
+        //     (0.0, 1.0, 0.0).into(),
+        //     cgmath::Deg(60.0 * dt.as_secs_f32()),
+        // ) * old_position)
+        //     .into();
+        // self.queue.write_buffer(
+        //     &self.light_buffer,
+        //     0,
+        //     bytemuck::cast_slice(&[self.light_uniform]),
+        // );
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -661,6 +661,14 @@ impl<'a> State<'a> {
             );
 
             render_pass.set_pipeline(&self.render_pipeline);
+
+            // use model::DrawModel;
+            // render_pass.draw_model_instanced(
+            //     &self.obj_model,
+            //     0..self.instances.len() as u32,
+            //     &self.camera_bind_group,
+            //     &self.light_bind_group,
+            // );
 
             use voxel::DrawVoxelModel;
             render_pass.draw_voxel_model_instanced(
