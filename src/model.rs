@@ -12,8 +12,8 @@ pub struct ModelVertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
-    pub tangent: [f32; 3],
-    pub bitangent: [f32; 3],
+    // pub tangent: [f32; 3],
+    // pub bitangent: [f32; 3],
 }
 
 impl Vertex for ModelVertex {
@@ -39,16 +39,16 @@ impl Vertex for ModelVertex {
                     format: wgpu::VertexFormat::Float32x3,
                 },
                 // Tangent and bitangent
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 11]>() as wgpu::BufferAddress,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
+                // wgpu::VertexAttribute {
+                //     offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                //     shader_location: 3,
+                //     format: wgpu::VertexFormat::Float32x3,
+                // },
+                // wgpu::VertexAttribute {
+                //     offset: mem::size_of::<[f32; 11]>() as wgpu::BufferAddress,
+                //     shader_location: 4,
+                //     format: wgpu::VertexFormat::Float32x3,
+                // },
             ],
         }
     }
@@ -114,7 +114,6 @@ pub struct Mesh {
     pub material: usize,
 }
 
-// model.rs
 pub trait DrawModel<'a> {
     fn draw_mesh(
         &mut self,

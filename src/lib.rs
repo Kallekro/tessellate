@@ -2,10 +2,12 @@ mod camera;
 mod model;
 mod resources;
 mod texture;
+mod voxel;
 
 use cgmath::prelude::*;
-use model::{Model, Vertex};
+use model::{Material, Model, Vertex};
 use std::iter;
+use voxel::VoxelModel;
 
 use winit::{
     dpi::PhysicalPosition,
@@ -216,6 +218,7 @@ struct State<'a> {
     light_render_pipeline: wgpu::RenderPipeline,
     depth_texture: texture::Texture,
     obj_model: Model,
+    voxel_model: VoxelModel,
     mouse_pressed: bool,
 }
 
@@ -329,29 +332,6 @@ impl<'a> State<'a> {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-
-        // let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //     layout: &texture_bind_group_layout,
-        //     entries: &[
-        //         wgpu::BindGroupEntry {
-        //             binding: 0,
-        //             resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 1,
-        //             resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 2,
-        //             resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 3,
-        //             resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-        //         },
-        //     ],
-        //     label: Some("diffuse_bind_group"),
-        // });
 
         let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let projection =
@@ -512,6 +492,26 @@ impl<'a> State<'a> {
                 .await
                 .unwrap();
 
+        let diffuse_texture =
+            resources::load_texture("../res/cube-diffuse.jpg", false, &device, &queue)
+                .await
+                .unwrap();
+
+        let normal_texture =
+            resources::load_texture("../res/cube-normal.png", false, &device, &queue)
+                .await
+                .unwrap();
+
+        let material = model::Material::new(
+            &device,
+            "Cube".to_string(),
+            diffuse_texture,
+            normal_texture,
+            &texture_bind_group_layout,
+        );
+
+        let voxel_model = VoxelModel::new(&device, &texture_bind_group_layout, material);
+
         Self {
             surface,
             device,
@@ -534,6 +534,7 @@ impl<'a> State<'a> {
             light_render_pipeline,
             depth_texture,
             obj_model,
+            voxel_model,
             mouse_pressed: false,
         }
     }
@@ -585,7 +586,8 @@ impl<'a> State<'a> {
     fn update(&mut self, dt: instant::Duration) {
         // Update camera
         self.camera_controller.update_camera(&mut self.camera, dt);
-        self.camera_uniform.update_view_proj(&self.camera, &self.projection);
+        self.camera_uniform
+            .update_view_proj(&self.camera, &self.projection);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -594,10 +596,11 @@ impl<'a> State<'a> {
 
         // Update light
         let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
-        self.light_uniform.position =
-            (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(60.0 * dt.as_secs_f32()))
-                * old_position)
-                .into();
+        self.light_uniform.position = (cgmath::Quaternion::from_axis_angle(
+            (0.0, 1.0, 0.0).into(),
+            cgmath::Deg(60.0 * dt.as_secs_f32()),
+        ) * old_position)
+            .into();
         self.queue.write_buffer(
             &self.light_buffer,
             0,
@@ -659,13 +662,18 @@ impl<'a> State<'a> {
 
             render_pass.set_pipeline(&self.render_pipeline);
 
-            use model::DrawModel;
-            render_pass.draw_model_instanced(
-                &self.obj_model,
+            use voxel::DrawVoxelModel;
+            render_pass.draw_voxel_model_instanced(
+                &self.voxel_model,
                 0..self.instances.len() as u32,
                 &self.camera_bind_group,
                 &self.light_bind_group,
             );
+            // render_pass.draw_voxel_model(
+            //     &self.voxel_model,
+            //     &self.camera_bind_group,
+            //     &self.light_bind_group,
+            // );
         }
 
         self.queue.submit(iter::once(encoder.finish()));
