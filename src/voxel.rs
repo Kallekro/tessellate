@@ -14,46 +14,137 @@ struct Vertex {
 
 const VERTICES: &[Vertex] = &[
     // Back face (z = -1)
-    Vertex { position: [1.0, 1.0, -1.0], tex_coords: [1.0, 1.0], normal: [0.0, 0.0, -1.0] },    // top-right
-    Vertex { position: [1.0, -1.0, -1.0], tex_coords: [1.0, 0.0], normal: [0.0, 0.0, -1.0] },   // bottom-right
-    Vertex { position: [-1.0, -1.0, -1.0], tex_coords: [0.0, 0.0], normal: [0.0, 0.0, -1.0] },  // bottom-left
-    Vertex { position: [-1.0, 1.0, -1.0], tex_coords: [0.0, 1.0], normal: [0.0, 0.0, -1.0] },   // top-left
-
+    Vertex {
+        position: [1.0, 1.0, -1.0],
+        tex_coords: [1.0, 1.0],
+        normal: [0.0, 0.0, -1.0],
+    }, // top-right
+    Vertex {
+        position: [1.0, -1.0, -1.0],
+        tex_coords: [1.0, 0.0],
+        normal: [0.0, 0.0, -1.0],
+    }, // bottom-right
+    Vertex {
+        position: [-1.0, -1.0, -1.0],
+        tex_coords: [0.0, 0.0],
+        normal: [0.0, 0.0, -1.0],
+    }, // bottom-left
+    Vertex {
+        position: [-1.0, 1.0, -1.0],
+        tex_coords: [0.0, 1.0],
+        normal: [0.0, 0.0, -1.0],
+    }, // top-left
     // Front face (z = 1)
-    Vertex { position: [1.0, 1.0, 1.0], tex_coords: [1.0, 1.0], normal: [0.0, 0.0, 1.0] },     // top-right
-    Vertex { position: [1.0, -1.0, 1.0], tex_coords: [1.0, 0.0], normal: [0.0, 0.0, 1.0] },    // bottom-right
-    Vertex { position: [-1.0, -1.0, 1.0], tex_coords: [0.0, 0.0], normal: [0.0, 0.0, 1.0] },   // bottom-left
-    Vertex { position: [-1.0, 1.0, 1.0], tex_coords: [0.0, 1.0], normal: [0.0, 0.0, 1.0] },    // top-left
-
+    Vertex {
+        position: [1.0, 1.0, 1.0],
+        tex_coords: [1.0, 1.0],
+        normal: [0.0, 0.0, 1.0],
+    }, // top-right
+    Vertex {
+        position: [1.0, -1.0, 1.0],
+        tex_coords: [1.0, 0.0],
+        normal: [0.0, 0.0, 1.0],
+    }, // bottom-right
+    Vertex {
+        position: [-1.0, -1.0, 1.0],
+        tex_coords: [0.0, 0.0],
+        normal: [0.0, 0.0, 1.0],
+    }, // bottom-left
+    Vertex {
+        position: [-1.0, 1.0, 1.0],
+        tex_coords: [0.0, 1.0],
+        normal: [0.0, 0.0, 1.0],
+    }, // top-left
     // Top face (y = 1)
-    Vertex { position: [1.0, 1.0, 1.0], tex_coords: [1.0, 1.0], normal: [0.0, 1.0, 0.0] },     // front-right
-    Vertex { position: [1.0, 1.0, -1.0], tex_coords: [1.0, 0.0], normal: [0.0, 1.0, 0.0] },    // back-right
-    Vertex { position: [-1.0, 1.0, -1.0], tex_coords: [0.0, 0.0], normal: [0.0, 1.0, 0.0] },   // back-left
-    Vertex { position: [-1.0, 1.0, 1.0], tex_coords: [0.0, 1.0], normal: [0.0, 1.0, 0.0] },    // front-left
-
+    Vertex {
+        position: [1.0, 1.0, 1.0],
+        tex_coords: [1.0, 1.0],
+        normal: [0.0, 1.0, 0.0],
+    }, // front-right
+    Vertex {
+        position: [1.0, 1.0, -1.0],
+        tex_coords: [1.0, 0.0],
+        normal: [0.0, 1.0, 0.0],
+    }, // back-right
+    Vertex {
+        position: [-1.0, 1.0, -1.0],
+        tex_coords: [0.0, 0.0],
+        normal: [0.0, 1.0, 0.0],
+    }, // back-left
+    Vertex {
+        position: [-1.0, 1.0, 1.0],
+        tex_coords: [0.0, 1.0],
+        normal: [0.0, 1.0, 0.0],
+    }, // front-left
     // Bottom face (y = -1)
-    Vertex { position: [1.0, -1.0, 1.0], tex_coords: [1.0, 1.0], normal: [0.0, -1.0, 0.0] },    // front-right
-    Vertex { position: [1.0, -1.0, -1.0], tex_coords: [1.0, 0.0], normal: [0.0, -1.0, 0.0] },   // back-right
-    Vertex { position: [-1.0, -1.0, -1.0], tex_coords: [0.0, 0.0], normal: [0.0, -1.0, 0.0] },  // back-left
-    Vertex { position: [-1.0, -1.0, 1.0], tex_coords: [0.0, 1.0], normal: [0.0, -1.0, 0.0] },   // front-left
-
+    Vertex {
+        position: [1.0, -1.0, 1.0],
+        tex_coords: [1.0, 1.0],
+        normal: [0.0, -1.0, 0.0],
+    }, // front-right
+    Vertex {
+        position: [1.0, -1.0, -1.0],
+        tex_coords: [1.0, 0.0],
+        normal: [0.0, -1.0, 0.0],
+    }, // back-right
+    Vertex {
+        position: [-1.0, -1.0, -1.0],
+        tex_coords: [0.0, 0.0],
+        normal: [0.0, -1.0, 0.0],
+    }, // back-left
+    Vertex {
+        position: [-1.0, -1.0, 1.0],
+        tex_coords: [0.0, 1.0],
+        normal: [0.0, -1.0, 0.0],
+    }, // front-left
     // Right face (x = 1)
-    Vertex { position: [1.0, 1.0, 1.0], tex_coords: [1.0, 1.0], normal: [1.0, 0.0, 0.0] },     // front-top
-    Vertex { position: [1.0, -1.0, 1.0], tex_coords: [1.0, 0.0], normal: [1.0, 0.0, 0.0] },    // front-bottom
-    Vertex { position: [1.0, -1.0, -1.0], tex_coords: [0.0, 0.0], normal: [1.0, 0.0, 0.0] },   // back-bottom
-    Vertex { position: [1.0, 1.0, -1.0], tex_coords: [0.0, 1.0], normal: [1.0, 0.0, 0.0] },    // back-top
-
+    Vertex {
+        position: [1.0, 1.0, 1.0],
+        tex_coords: [1.0, 1.0],
+        normal: [1.0, 0.0, 0.0],
+    }, // front-top
+    Vertex {
+        position: [1.0, -1.0, 1.0],
+        tex_coords: [1.0, 0.0],
+        normal: [1.0, 0.0, 0.0],
+    }, // front-bottom
+    Vertex {
+        position: [1.0, -1.0, -1.0],
+        tex_coords: [0.0, 0.0],
+        normal: [1.0, 0.0, 0.0],
+    }, // back-bottom
+    Vertex {
+        position: [1.0, 1.0, -1.0],
+        tex_coords: [0.0, 1.0],
+        normal: [1.0, 0.0, 0.0],
+    }, // back-top
     // Left face (x = -1)
-    Vertex { position: [-1.0, 1.0, 1.0], tex_coords: [1.0, 1.0], normal: [-1.0, 0.0, 0.0] },    // front-top
-    Vertex { position: [-1.0, -1.0, 1.0], tex_coords: [1.0, 0.0], normal: [-1.0, 0.0, 0.0] },   // front-bottom
-    Vertex { position: [-1.0, -1.0, -1.0], tex_coords: [0.0, 0.0], normal: [-1.0, 0.0, 0.0] },  // back-bottom
-    Vertex { position: [-1.0, 1.0, -1.0], tex_coords: [0.0, 1.0], normal: [-1.0, 0.0, 0.0] },   // back-top
+    Vertex {
+        position: [-1.0, 1.0, 1.0],
+        tex_coords: [1.0, 1.0],
+        normal: [-1.0, 0.0, 0.0],
+    }, // front-top
+    Vertex {
+        position: [-1.0, -1.0, 1.0],
+        tex_coords: [1.0, 0.0],
+        normal: [-1.0, 0.0, 0.0],
+    }, // front-bottom
+    Vertex {
+        position: [-1.0, -1.0, -1.0],
+        tex_coords: [0.0, 0.0],
+        normal: [-1.0, 0.0, 0.0],
+    }, // back-bottom
+    Vertex {
+        position: [-1.0, 1.0, -1.0],
+        tex_coords: [0.0, 1.0],
+        normal: [-1.0, 0.0, 0.0],
+    }, // back-top
 ];
 
-const INDICES: &[u16] = &[
-    0, 1, 2, 2, 3, 0,       // Back face
-    4, 6, 5, 6, 4, 7,       // Front face
-    8, 9, 10, 10, 11, 8,    // Top face
+const INDICES: &[u32] = &[
+    0, 1, 2, 2, 3, 0, // Back face
+    4, 6, 5, 6, 4, 7, // Front face
+    8, 9, 10, 10, 11, 8, // Top face
     12, 14, 13, 14, 12, 15, // Bottom face
     16, 17, 18, 18, 19, 16, // Right face
     20, 22, 21, 22, 20, 23, // Left face
@@ -83,13 +174,17 @@ impl VoxelModel {
         layout: &wgpu::BindGroupLayout,
         material: model::Material,
     ) -> Self {
-        let vertices = (0..VERTICES.len())
+        let mut vertices = (0..VERTICES.len())
             .map(|i| model::ModelVertex {
                 position: VERTICES[i].position,
                 tex_coords: VERTICES[i].tex_coords,
                 normal: VERTICES[i].normal,
+                tangent: [0.0; 3],
+                bitangent: [0.0; 3],
             })
             .collect::<Vec<_>>();
+
+        model::ModelVertex::calculate_tangents_and_bitangents(&mut vertices, &INDICES.to_vec());
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
@@ -173,7 +268,7 @@ where
         self.set_vertex_buffer(0, voxel_model.vertex_buffer.slice(..));
         self.set_index_buffer(
             voxel_model.index_buffer.slice(..),
-            wgpu::IndexFormat::Uint16,
+            wgpu::IndexFormat::Uint32,
         );
         self.set_bind_group(0, &voxel_model.bind_group, &[]);
         self.set_bind_group(1, camera_bind_group, &[]);
