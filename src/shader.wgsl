@@ -90,10 +90,10 @@ fn shadow_vs_main(
 var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
 var s_diffuse: sampler;
-@group(3) @binding(0)
-var t_shadow: texture_depth_2d;
-@group(3) @binding(1)
-var s_shadow: sampler_comparison;
+// @group(3) @binding(0)
+// var t_shadow: texture_depth_2d;
+// @group(3) @binding(1)
+// var s_shadow: sampler_comparison;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -109,11 +109,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 
     // Sample shadow map
-    let shadow_depth = textureSampleCompare(t_shadow, s_shadow, proj_coords.xy, proj_coords.z);
+    // let shadow_depth = textureSampleCompare(t_shadow, s_shadow, proj_coords.xy, proj_coords.z);
 
     // Compare depths with bias to avoid shadow acne
-    let bias = 0.005;
-    let shadow = select(1.0, 0.5, proj_coords.z - bias > shadow_depth);
+    // let bias = 0.005;
+    // let shadow = select(1.0, 0.5, proj_coords.z - bias > shadow_depth);
+    let shadow = 1.0;
 
 
     // We don't need (or want) much ambient light, so 0.1 is fine
