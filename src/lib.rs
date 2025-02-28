@@ -407,7 +407,7 @@ impl<'a> State<'a> {
         });
 
         let light_uniform = LightUniform {
-            position: [10.0, 10.0, 10.0],
+            position: [0.0, 10.0, 0.0],
             _padding: 0,
             color: [1., 1., 1.],
             _padding2: 0,

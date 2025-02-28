@@ -240,8 +240,6 @@ impl VoxelModel {
             })
             .collect::<Vec<_>>();
 
-        // model::ModelVertex::calculate_tangents_and_bitangents(&mut vertices, &INDICES.to_vec());
-
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(&vertices),
