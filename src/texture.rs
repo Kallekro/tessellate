@@ -2,7 +2,7 @@ use anyhow::*;
 use image::GenericImageView;
 use wgpu::TextureUsages;
 
-pub const SHADOW_MAP_SIZE: u32 = 1024;
+pub const SHADOW_MAP_SIZE: u32 = 2048;
 
 #[derive(Clone)]
 pub struct Texture {

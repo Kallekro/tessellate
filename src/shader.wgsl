@@ -86,6 +86,28 @@ fn shadow_vs_main(
 
 // Fragment shader
 
+fn get_poisson_sample(index: i32) -> vec2<f32> {
+    var samples = array<vec2<f32>, 16>(
+        vec2(-0.94201624, -0.39906216),
+        vec2(0.94558609, -0.76890725),
+        vec2(-0.094184101, -0.92938870),
+        vec2(0.34495938, 0.29387760),
+        vec2(-0.91588581, 0.45771432),
+        vec2(-0.81544232, -0.87912464),
+        vec2(-0.38277543, 0.27676845),
+        vec2(0.97484398, 0.75648379),
+        vec2(0.44323325, -0.97511554),
+        vec2(0.53742981, -0.47373420),
+        vec2(-0.26496911, -0.41893023),
+        vec2(0.79197514, 0.19090188),
+        vec2(-0.24188840, 0.99706507),
+        vec2(-0.81409955, 0.91437590),
+        vec2(0.19984126, 0.78641367),
+        vec2(0.14383161, -0.14100790)
+    );
+    return samples[index];
+}
+
 @group(0) @binding(0)
 var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
@@ -99,24 +121,7 @@ var s_shadow: sampler_comparison;
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let object_color: vec4<f32> = textureSample(t_diffuse, s_diffuse, in.tex_coords);
 
-    // Transform fragment position into light space
-    // let light_space_pos = light.view_proj * vec4<f32>(in.world_position, 1.0);
-
-    // // Perspective divide and convert to UV coordinates
-    // let ndc = light_space_pos.xyz / light_space_pos.w;
-    // let proj_coords = vec3<f32>(
-    //     ndc.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5),
-    //     ndc.z
-    // );
-
-    // // Sample shadow map
-    // let shadow_depth = textureSampleCompare(t_shadow, s_shadow, proj_coords.xy, proj_coords.z);
-
-    // // Compare depths with bias to avoid shadow acne
-    // let bias = 0.0005;
-    // let shadow = select(1.0, 0.5, proj_coords.z - bias > shadow_depth);
-    // let shadow = 1.0;
-// Transform world position to light space with proper perspective divide
+    // Transform world position to light space with proper perspective divide
     let light_dir = normalize(light.position.xyz - in.world_position);
     let view_dir = normalize(camera.view_pos.xyz - in.world_position);
     let half_dir = normalize(view_dir + light_dir);
@@ -133,18 +138,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let bias = max(0.001 * (1.0 - dot(in.world_normal, light_dir)), 0.0001);
 
         let texel_size = 1.0 / f32(2048);
-        for(var y = -1; y <= 1; y += 1) {
-            for(var x = -1; x <= 1; x += 1) {
-                let offset = vec2<f32>(f32(x), f32(y)) * texel_size;
-                visibility += textureSampleCompare(
-                    t_shadow,
-                    s_shadow,
-                    shadow_coords + offset,
-                    ndc.z - bias
-                );
-            }
+        for(var i = 0; i < 16; i++) {
+            let offset = get_poisson_sample(i) * texel_size * 2.0;
+            visibility += textureSampleCompare(
+                t_shadow,
+                s_shadow,
+                shadow_coords + offset,
+                ndc.z - bias
+            );
         }
-        visibility /= 9.0;
+        visibility /= 16.0;
 
         // Fade out shadows at texture edges
         let edge = 0.1;
