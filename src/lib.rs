@@ -1,11 +1,12 @@
 mod camera;
+mod light;
 mod model;
 mod resources;
 mod texture;
 mod voxel;
 
 use cgmath::prelude::*;
-use model::{Material, Model, Vertex};
+use model::{Material, Model, ModelVertex, Vertex};
 use std::iter;
 use voxel::VoxelModel;
 
@@ -25,10 +26,31 @@ use wasm_bindgen::prelude::*;
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct LightUniform {
-    position: [f32; 3],
-    _padding: u32,
+    position: [f32; 4],
     color: [f32; 3],
-    _padding2: u32,
+    _padding: u32,
+    view_proj: [[f32; 4]; 4],
+}
+
+impl LightUniform {
+    fn new(color: [f32; 3]) -> Self {
+        use cgmath::SquareMatrix;
+        Self {
+            position: [0.0; 4],
+            color,
+            _padding: 0,
+            view_proj: cgmath::Matrix4::identity().into(),
+        }
+    }
+
+    fn update_view_proj(
+        &mut self,
+        light: &light::DirectionalLight,
+        projection: &camera::Projection,
+    ) {
+        self.position = light.position.to_homogeneous().into();
+        self.view_proj = (projection.calc_matrix() * light.calc_matrix()).into();
+    }
 }
 
 // We need this for Rust to store our data correctly for the shaders
@@ -133,7 +155,7 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     0.0,
     NUM_INSTANCES_PER_ROW as f32 * 0.5,
 );
-const SPACE_BETWEEN: f32 = 3.0;
+const SPACE_BETWEEN: f32 = 2.0;
 
 fn create_render_pipeline(
     device: &wgpu::Device,
@@ -141,21 +163,19 @@ fn create_render_pipeline(
     color_format: wgpu::TextureFormat,
     depth_format: Option<wgpu::TextureFormat>,
     vertex_layouts: &[wgpu::VertexBufferLayout],
-    shader: wgpu::ShaderModuleDescriptor,
+    shader_module: &wgpu::ShaderModule,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(shader);
-
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Render Pipeline"),
         layout: Some(layout),
         vertex: wgpu::VertexState {
-            module: &shader,
+            module: shader_module,
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
             buffers: vertex_layouts,
         },
         fragment: Some(wgpu::FragmentState {
-            module: &shader,
+            module: shader_module,
             entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
@@ -217,6 +237,9 @@ struct State<'a> {
     light_bind_group: wgpu::BindGroup,
     light_render_pipeline: wgpu::RenderPipeline,
     depth_texture: texture::Texture,
+    shadow_texture: texture::Texture,
+    shadow_bind_group: wgpu::BindGroup,
+    shadow_pipeline: wgpu::RenderPipeline,
     obj_model: Model,
     voxel_model: VoxelModel,
     mouse_pressed: bool,
@@ -333,7 +356,8 @@ impl<'a> State<'a> {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let camera = camera::Camera::new((-2.0, 30.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-70.0));
+        let camera =
+            camera::Camera::new((-2.0, 30.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-70.0));
         let projection =
             camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera::CameraController::new(4.0, 0.4);
@@ -376,8 +400,9 @@ impl<'a> State<'a> {
                 (0..NUM_INSTANCES_PER_ROW).map(move |x| {
                     let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
                     let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let y = x.min(z); //1. - x / z;
 
-                    let position = cgmath::Vector3 { x, y: 0.0, z };
+                    let position = cgmath::Vector3 { x, y: y, z };
 
                     // let rotation = if position.is_zero() {
                     //     // this is needed so an object at (0, 0, 0) won't get scaled to zero
@@ -406,12 +431,18 @@ impl<'a> State<'a> {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let light_uniform = LightUniform {
-            position: [0.0, 10.0, 0.0],
-            _padding: 0,
-            color: [1., 1., 1.],
-            _padding2: 0,
-        };
+        let directional_light =
+            light::DirectionalLight::new((10., 10., 10.), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+
+        let light_projection = camera::Projection::new(
+            texture::SHADOW_MAP_SIZE,
+            texture::SHADOW_MAP_SIZE,
+            cgmath::Deg(45.0),
+            0.1,
+            100.0,
+        );
+        let mut light_uniform = LightUniform::new([1., 1., 1.]);
+        light_uniform.update_view_proj(&directional_light, &light_projection);
 
         let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light VB"),
@@ -443,12 +474,101 @@ impl<'a> State<'a> {
             }],
         });
 
+        let shadow_texture = texture::Texture::create_shadow_texture(&device, "shadow_texture");
+
         let depth_texture =
             texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
         let shader = wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        };
+        let shader_module = device.create_shader_module(shader);
+
+        let shadow_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Shadow Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Depth,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                        count: None,
+                    },
+                ],
+            });
+
+        let shadow_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Shadow Bind Group"),
+            layout: &shadow_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&shadow_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&shadow_texture.sampler),
+                },
+            ],
+        });
+
+        let shadow_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Shadow Pipeline Layout"),
+                bind_group_layouts: &[
+                    &texture_bind_group_layout,
+                    &camera_bind_group_layout,
+                    &light_bind_group_layout,
+                ],
+                push_constant_ranges: &[],
+            });
+
+        let shadow_pipeline = {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Shadow Pipeline"),
+                layout: Some(&shadow_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader_module,
+                    entry_point: Some("shadow_vs_main"),
+                    buffers: &[ModelVertex::desc(), InstanceRaw::desc()],
+                    compilation_options: Default::default(),
+                },
+                fragment: None,
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: Some(wgpu::Face::Back),
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: texture::Texture::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState {
+                        constant: 2, // Slope-scale depth bias
+                        slope_scale: 2.0,
+                        clamp: 0.0,
+                    },
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            })
         };
 
         let render_pipeline_layout =
@@ -458,6 +578,7 @@ impl<'a> State<'a> {
                     &texture_bind_group_layout,
                     &camera_bind_group_layout,
                     &light_bind_group_layout,
+                    &shadow_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -468,7 +589,7 @@ impl<'a> State<'a> {
             config.format,
             Some(texture::Texture::DEPTH_FORMAT),
             &[model::ModelVertex::desc(), InstanceRaw::desc()],
-            shader,
+            &shader_module,
         );
 
         let light_render_pipeline = {
@@ -477,17 +598,18 @@ impl<'a> State<'a> {
                 bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
                 push_constant_ranges: &[],
             });
-            let shader = wgpu::ShaderModuleDescriptor {
+            let light_shader = wgpu::ShaderModuleDescriptor {
                 label: Some("Light Shader"),
                 source: wgpu::ShaderSource::Wgsl(include_str!("light.wgsl").into()),
             };
+            let light_shader_module = device.create_shader_module(light_shader);
             create_render_pipeline(
                 &device,
                 &layout,
                 config.format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc()],
-                shader,
+                &light_shader_module,
             )
         };
 
@@ -537,6 +659,9 @@ impl<'a> State<'a> {
             light_bind_group,
             light_render_pipeline,
             depth_texture,
+            shadow_texture,
+            shadow_bind_group,
+            shadow_pipeline,
             obj_model,
             voxel_model,
             mouse_pressed: false,
@@ -624,6 +749,37 @@ impl<'a> State<'a> {
                 label: Some("Render Encoder"),
             });
 
+        // 1. Add shadow pass before main render pass
+        {
+            let mut shadow_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Shadow Pass"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.shadow_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            shadow_pass.set_pipeline(&self.shadow_pipeline);
+            shadow_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+
+            // Draw models that cast shadows
+            use voxel::DrawVoxelModel;
+            shadow_pass.draw_voxel_model_instanced(
+                &self.voxel_model,
+                0..self.instances.len() as u32,
+                &self.camera_bind_group,
+                &self.light_bind_group,
+            );
+        }
+
+        // Main render pass
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -665,6 +821,7 @@ impl<'a> State<'a> {
             );
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(3, &self.shadow_bind_group, &[]);
 
             // use model::DrawModel;
             // render_pass.draw_model_instanced(

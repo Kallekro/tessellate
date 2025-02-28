@@ -8,8 +8,9 @@ struct Camera {
 var<uniform> camera: Camera;
 
 struct Light {
-    position: vec3<f32>,
+    position: vec4<f32>,
     color: vec3<f32>,
+    view_proj: mat4x4<f32>,
 }
 @group(2) @binding(0)
 var<uniform> light: Light;
@@ -34,6 +35,10 @@ struct VertexOutput {
     @location(0) tex_coords: vec2<f32>,
     @location(1) world_normal: vec3<f32>,
     @location(2) world_position: vec3<f32>,
+}
+
+struct ShadowVertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
 }
 
 @vertex
@@ -61,30 +66,69 @@ fn vs_main(
     return out;
 }
 
+// Add shadow vertex shader entry point
+@vertex
+fn shadow_vs_main(
+    model: VertexInput,
+    instance: InstanceInput,
+) -> ShadowVertexOutput {
+    let model_matrix = mat4x4<f32>(
+        instance.model_matrix_0,
+        instance.model_matrix_1,
+        instance.model_matrix_2,
+        instance.model_matrix_3,
+    );
+
+    var output: ShadowVertexOutput;
+    output.clip_position = light.view_proj * model_matrix * vec4<f32>(model.position, 1.0);
+    return output;
+}
+
 // Fragment shader
 
 @group(0) @binding(0)
 var t_diffuse: texture_2d<f32>;
-@group(0)@binding(1)
+@group(0) @binding(1)
 var s_diffuse: sampler;
+@group(3) @binding(0)
+var t_shadow: texture_depth_2d;
+@group(3) @binding(1)
+var s_shadow: sampler_comparison;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let object_color: vec4<f32> = textureSample(t_diffuse, s_diffuse, in.tex_coords);
 
+    // Transform fragment position into light space
+    let light_space_pos = light.view_proj * vec4<f32>(in.world_position, 1.0);
+
+    // Perspective divide and convert to UV coordinates
+    let proj_coords = vec3<f32>(
+        light_space_pos.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5),
+        light_space_pos.z / light_space_pos.w
+    );
+
+    // Sample shadow map
+    let shadow_depth = textureSampleCompare(t_shadow, s_shadow, proj_coords.xy, proj_coords.z);
+
+    // Compare depths with bias to avoid shadow acne
+    let bias = 0.005;
+    let shadow = select(1.0, 0.5, proj_coords.z - bias > shadow_depth);
+
+
     // We don't need (or want) much ambient light, so 0.1 is fine
     let ambient_strength = 0.1;
     let ambient_color = light.color * ambient_strength;
 
-    let light_dir = normalize(light.position - in.world_position);
+    let light_dir = normalize(light.position.xyz - in.world_position);
     let view_dir = normalize(camera.view_pos.xyz - in.world_position);
     let half_dir = normalize(view_dir + light_dir);
 
     let diffuse_strength = max(dot(in.world_normal, light_dir), 0.0);
-    let diffuse_color = light.color * diffuse_strength;
+    let diffuse_color = light.color * diffuse_strength * shadow;
 
     let specular_strength = pow(max(dot(in.world_normal, half_dir), 0.0), 32.0);
-    let specular_color = specular_strength * light.color;
+    let specular_color = specular_strength * light.color * shadow;
 
     let result = (ambient_color + diffuse_color + specular_color) * object_color.xyz;
 
