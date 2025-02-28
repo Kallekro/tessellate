@@ -5,7 +5,9 @@ mod resources;
 mod texture;
 mod voxel;
 
+use camera::Projection;
 use cgmath::prelude::*;
+use light::{DirectionalLight, DirectionalLightController};
 use model::{Material, Model, ModelVertex, Vertex};
 use std::iter;
 use voxel::VoxelModel;
@@ -207,7 +209,7 @@ const DEPTH_VERTICES: &[DepthVertex] = &[
 const DEPTH_INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 
 struct DepthPass {
-    // texture: texture::Texture,
+    texture: texture::Texture,
     layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
@@ -220,113 +222,14 @@ impl DepthPass {
     fn new(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        texture: &texture::Texture,
     ) -> Self {
-        // let texture = texture::Texture::create_shadow_texture(&device, "shadow_texture");
 
-        // let bind_group_layout =
-        //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        //         label: Some("Shadow Bind Group Layout"),
-        //         entries: &[
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 0,
-        //                 visibility: wgpu::ShaderStages::FRAGMENT,
-        //                 ty: wgpu::BindingType::Texture {
-        //                     sample_type: wgpu::TextureSampleType::Depth,
-        //                     view_dimension: wgpu::TextureViewDimension::D2,
-        //                     multisampled: false,
-        //                 },
-        //                 count: None,
-        //             },
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 1,
-        //                 visibility: wgpu::ShaderStages::FRAGMENT,
-        //                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-        //                 count: None,
-        //             },
-        //         ],
-        //     });
-
-        // let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //     label: Some("Shadow Bind Group"),
-        //     layout: &bind_group_layout,
-        //     entries: &[
-        //         wgpu::BindGroupEntry {
-        //             binding: 0,
-        //             resource: wgpu::BindingResource::TextureView(&texture.view),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 1,
-        //             resource: wgpu::BindingResource::Sampler(&texture.sampler),
-        //         },
-        //     ],
-        // });
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Depth Pass VB"),
-            contents: bytemuck::cast_slice(DEPTH_VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Depth Pass IB"),
-            contents: bytemuck::cast_slice(DEPTH_INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        // let shadow_pipeline_layout =
-        //     device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        //         label: Some("Shadow Pipeline Layout"),
-        //         bind_group_layouts: &[
-        //             &texture_bind_group_layout,
-        //             &camera_bind_group_layout,
-        //             &light_bind_group_layout,
-        //         ],
-        //         push_constant_ranges: &[],
-        //     });
-
-        // let shadow_pipeline = {
-        //     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        //         label: Some("Shadow Pipeline"),
-        //         layout: Some(&shadow_pipeline_layout),
-        //         vertex: wgpu::VertexState {
-        //             module: &shader_module,
-        //             entry_point: Some("shadow_vs_main"),
-        //             buffers: &[ModelVertex::desc(), InstanceRaw::desc()],
-        //             compilation_options: Default::default(),
-        //         },
-        //         fragment: None,
-        //         primitive: wgpu::PrimitiveState {
-        //             topology: wgpu::PrimitiveTopology::TriangleList,
-        //             strip_index_format: None,
-        //             front_face: wgpu::FrontFace::Ccw,
-        //             cull_mode: Some(wgpu::Face::Back),
-        //             unclipped_depth: false,
-        //             polygon_mode: wgpu::PolygonMode::Fill,
-        //             conservative: false,
-        //         },
-        //         depth_stencil: Some(wgpu::DepthStencilState {
-        //             format: texture::Texture::DEPTH_FORMAT,
-        //             depth_write_enabled: true,
-        //             depth_compare: wgpu::CompareFunction::LessEqual,
-        //             stencil: wgpu::StencilState::default(),
-        //             bias: wgpu::DepthBiasState {
-        //                 constant: 2, // Slope-scale depth bias
-        //                 slope_scale: 2.0,
-        //                 clamp: 0.0,
-        //             },
-        //         }),
-        //         multisample: wgpu::MultisampleState::default(),
-        //         multiview: None,
-        //         cache: None,
-        //     })
-        // };
-
-        // let texture = texture::Texture::create_depth_texture_non_comparison_sampler(
-        //     device,
-        //     config.width,
-        //     config.height,
-        //     "depth_texture",
-        // );
+        let texture = texture::Texture::create_depth_texture_non_comparison_sampler(
+            &device,
+            texture::SHADOW_MAP_SIZE,
+            texture::SHADOW_MAP_SIZE,
+            "debug_shadow_texture",
+        );
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
@@ -429,7 +332,7 @@ impl DepthPass {
         });
 
         Self {
-            // texture,
+            texture,
             layout,
             bind_group,
             vertex_buffer,
@@ -541,6 +444,11 @@ fn create_render_pipeline(
     })
 }
 
+enum InputMode {
+    Camera,
+    Light,
+}
+
 struct State<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
@@ -560,6 +468,9 @@ struct State<'a> {
     camera_bind_group: wgpu::BindGroup,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
+    directional_light: DirectionalLight,
+    light_projection: Projection,
+    light_controller: light::DirectionalLightController,
     light_uniform: LightUniform,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
@@ -572,6 +483,7 @@ struct State<'a> {
     obj_model: Model,
     voxel_model: VoxelModel,
     mouse_pressed: bool,
+    input_mode: InputMode,
 }
 
 impl<'a> State<'a> {
@@ -766,10 +678,13 @@ impl<'a> State<'a> {
         let light_projection = camera::Projection::new(
             texture::SHADOW_MAP_SIZE,
             texture::SHADOW_MAP_SIZE,
-            cgmath::Deg(45.0),
+            cgmath::Deg(90.0),
             0.1,
             100.0,
         );
+
+        let light_controller = DirectionalLightController::new(4.0, 0.4);
+
         let mut light_uniform = LightUniform::new([1., 1., 1.]);
         light_uniform.update_view_proj(&directional_light, &light_projection);
 
@@ -803,15 +718,19 @@ impl<'a> State<'a> {
             }],
         });
 
-        let shadow_texture = texture::Texture::create_depth_texture_non_comparison_sampler(
+        let shadow_texture = texture::Texture::create_depth_texture(
             &device,
             texture::SHADOW_MAP_SIZE,
             texture::SHADOW_MAP_SIZE,
             "shadow_texture",
         );
 
-        let depth_texture =
-            texture::Texture::create_depth_texture(&device, &config, "depth_texture");
+        let depth_texture = texture::Texture::create_depth_texture(
+            &device,
+            config.width,
+            config.height,
+            "depth_texture",
+        );
 
         let shader = wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -827,7 +746,7 @@ impl<'a> State<'a> {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            sample_type: wgpu::TextureSampleType::Depth,
                             view_dimension: wgpu::TextureViewDimension::D2,
                             multisampled: false,
                         },
@@ -836,7 +755,7 @@ impl<'a> State<'a> {
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                         count: None,
                     },
                 ],
@@ -972,7 +891,7 @@ impl<'a> State<'a> {
 
         let voxel_model = VoxelModel::new(&device, &texture_bind_group_layout, material);
 
-        let shadow_debug_depth_pass = DepthPass::new(&device, &config, &shadow_texture);
+        let shadow_debug_depth_pass = DepthPass::new(&device, &config);
 
         Self {
             surface,
@@ -990,6 +909,9 @@ impl<'a> State<'a> {
             camera_bind_group,
             instances,
             instance_buffer,
+            directional_light,
+            light_projection,
+            light_controller,
             light_uniform,
             light_buffer,
             light_bind_group,
@@ -1002,6 +924,7 @@ impl<'a> State<'a> {
             obj_model,
             voxel_model,
             mouse_pressed: false,
+            input_mode: InputMode::Camera,
         }
     }
 
@@ -1015,8 +938,12 @@ impl<'a> State<'a> {
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
-            self.depth_texture =
-                texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            self.depth_texture = texture::Texture::create_depth_texture(
+                &self.device,
+                self.config.width,
+                self.config.height,
+                "depth_texture",
+            );
             self.shadow_debug_depth_pass
                 .resize(&self.device, &self.config);
             self.surface.configure(&self.device, &self.config);
@@ -1034,9 +961,25 @@ impl<'a> State<'a> {
                         ..
                     },
                 ..
-            } => self.camera_controller.process_keyboard(*key, *state),
+            } => match key {
+                KeyCode::Digit1 => {
+                    self.input_mode = InputMode::Camera;
+                    true
+                }
+                KeyCode::Digit2 => {
+                    self.input_mode = InputMode::Light;
+                    true
+                }
+                _ => match self.input_mode {
+                    InputMode::Camera => self.camera_controller.process_keyboard(*key, *state),
+                    InputMode::Light => self.light_controller.process_keyboard(*key, *state),
+                },
+            },
             WindowEvent::MouseWheel { delta, .. } => {
-                self.camera_controller.process_scroll(delta);
+                match self.input_mode {
+                    InputMode::Camera => self.camera_controller.process_scroll(delta),
+                    InputMode::Light => self.light_controller.process_scroll(delta),
+                }
                 true
             }
             WindowEvent::MouseInput {
@@ -1063,6 +1006,15 @@ impl<'a> State<'a> {
         );
 
         // Update light
+        self.light_controller
+            .update_light(&mut self.directional_light, dt);
+        self.light_uniform
+            .update_view_proj(&self.directional_light, &self.light_projection);
+        self.queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice(&[self.light_uniform]),
+        );
         // let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
         // self.light_uniform.position = (cgmath::Quaternion::from_axis_angle(
         //     (0.0, 1.0, 0.0).into(),
@@ -1088,7 +1040,7 @@ impl<'a> State<'a> {
                 label: Some("Render Encoder"),
             });
 
-        // 1. Add shadow pass before main render pass
+        // Add shadow pass before main render pass
         {
             let mut shadow_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Shadow Pass"),
@@ -1115,6 +1067,24 @@ impl<'a> State<'a> {
                 0..self.instances.len() as u32,
                 &self.camera_bind_group,
                 &self.light_bind_group,
+            );
+        }
+
+        {
+            encoder.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.shadow_texture.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: &self.shadow_debug_depth_pass.texture.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                self.shadow_texture.texture.size(),
             );
         }
 
@@ -1239,7 +1209,10 @@ pub async fn run() {
                     event: DeviceEvent::MouseMotion{ delta, },
                     .. // We're not using device_id currently
                 } => if state.mouse_pressed {
-                    state.camera_controller.process_mouse(delta.0, delta.1)
+                    match state.input_mode {
+                        InputMode::Camera => state.camera_controller.process_mouse(delta.0, delta.1),
+                        InputMode::Light => state.light_controller.process_mouse(delta.0, delta.1),
+                    }
                 }
                 Event::WindowEvent {
                     ref event,

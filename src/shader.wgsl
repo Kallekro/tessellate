@@ -90,40 +90,73 @@ fn shadow_vs_main(
 var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
 var s_diffuse: sampler;
-// @group(3) @binding(0)
-// var t_shadow: texture_depth_2d;
-// @group(3) @binding(1)
-// var s_shadow: sampler_comparison;
+@group(3) @binding(0)
+var t_shadow: texture_depth_2d;
+@group(3) @binding(1)
+var s_shadow: sampler_comparison;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let object_color: vec4<f32> = textureSample(t_diffuse, s_diffuse, in.tex_coords);
 
     // Transform fragment position into light space
-    let light_space_pos = light.view_proj * vec4<f32>(in.world_position, 1.0);
+    // let light_space_pos = light.view_proj * vec4<f32>(in.world_position, 1.0);
 
-    // Perspective divide and convert to UV coordinates
-    let proj_coords = vec3<f32>(
-        light_space_pos.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5),
-        light_space_pos.z / light_space_pos.w
-    );
+    // // Perspective divide and convert to UV coordinates
+    // let ndc = light_space_pos.xyz / light_space_pos.w;
+    // let proj_coords = vec3<f32>(
+    //     ndc.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5),
+    //     ndc.z
+    // );
 
-    // Sample shadow map
+    // // Sample shadow map
     // let shadow_depth = textureSampleCompare(t_shadow, s_shadow, proj_coords.xy, proj_coords.z);
 
-    // Compare depths with bias to avoid shadow acne
-    // let bias = 0.005;
+    // // Compare depths with bias to avoid shadow acne
+    // let bias = 0.0005;
     // let shadow = select(1.0, 0.5, proj_coords.z - bias > shadow_depth);
-    let shadow = 1.0;
+    // let shadow = 1.0;
+// Transform world position to light space with proper perspective divide
+    let light_dir = normalize(light.position.xyz - in.world_position);
+    let view_dir = normalize(camera.view_pos.xyz - in.world_position);
+    let half_dir = normalize(view_dir + light_dir);
 
+    let light_pos = light.view_proj * vec4<f32>(in.world_position, 1.0);
+    let ndc = light_pos.xyz / light_pos.w;
+
+    var shadow = 1.0;
+    // Check if fragment is in light's view
+    if (abs(ndc.x) <= 1.0 && abs(ndc.y) <= 1.0 && ndc.z <= 1.0) {
+        let shadow_coords = vec2<f32>(ndc.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5));
+
+        var visibility = 0.0;
+        let bias = max(0.001 * (1.0 - dot(in.world_normal, light_dir)), 0.0001);
+
+        let texel_size = 1.0 / f32(2048);
+        for(var y = -1; y <= 1; y += 1) {
+            for(var x = -1; x <= 1; x += 1) {
+                let offset = vec2<f32>(f32(x), f32(y)) * texel_size;
+                visibility += textureSampleCompare(
+                    t_shadow,
+                    s_shadow,
+                    shadow_coords + offset,
+                    ndc.z - bias
+                );
+            }
+        }
+        visibility /= 9.0;
+
+        // Fade out shadows at texture edges
+        let edge = 0.1;
+        let fade = smoothstep(1.0 - edge, 1.0, max(abs(ndc.x), abs(ndc.y)));
+        visibility = mix(visibility, 1.0, fade);
+
+        shadow = visibility;
+    }
 
     // We don't need (or want) much ambient light, so 0.1 is fine
     let ambient_strength = 0.1;
     let ambient_color = light.color * ambient_strength;
-
-    let light_dir = normalize(light.position.xyz - in.world_position);
-    let view_dir = normalize(camera.view_pos.xyz - in.world_position);
-    let half_dir = normalize(view_dir + light_dir);
 
     let diffuse_strength = max(dot(in.world_normal, light_dir), 0.0);
     let diffuse_color = light.color * diffuse_strength * shadow;
